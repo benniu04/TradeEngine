@@ -11,7 +11,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		DatabaseURL:  envOrDefault("DATABASE_URL", "postgres://trade:trade@localhost:5432/tradeengine?sslmode=disable"),
+		DatabaseURL:  envOrDefault("DATABASE_URL", "postgres://trade:trade@localhost:5433/tradeengine?sslmode=disable"),
 		RedisAddr:    envOrDefault("REDIS_ADDR", "localhost:6379"),
 		KafkaBrokers: []string{envOrDefault("KAFKA_BROKER", "localhost:9092")},
 		GatewayPort:  envOrDefault("GATEWAY_PORT", "8080"),

@@ -14,10 +14,10 @@ test:
 	go test ./... -v -race -count=1
 
 docker-up:
-	docker-compose up -d
+	docker compose up -d
 
 docker-down:
-	docker-compose down -v
+	docker compose down -v
 
 lint:
 	golangci-lint run ./...
