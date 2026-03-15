@@ -43,11 +43,11 @@ func GetUser(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) (*models
 func GetOrder(ctx context.Context, pool *pgxpool.Pool, orderID uuid.UUID) (*models.Order, error) {
 	var o models.Order
 	err := pool.QueryRow(ctx,
-		`SELECT id, user_id, symbol, side, quantity, price, status, idempotency_key,
-		        created_at, executed_at, settled_at
+		`SELECT id, user_id, symbol, side, quantity, filled_quantity, price, status,
+		        order_type, idempotency_key, created_at, executed_at, settled_at
 		 FROM orders WHERE id = $1`, orderID,
-	).Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.Price,
-		&o.Status, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt)
+	).Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.FilledQuantity,
+		&o.Price, &o.Status, &o.OrderType, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt)
 	if err != nil {
 		return nil, fmt.Errorf("get order: %w", err)
 	}
@@ -57,11 +57,11 @@ func GetOrder(ctx context.Context, pool *pgxpool.Pool, orderID uuid.UUID) (*mode
 func GetOrderByIdempotencyKey(ctx context.Context, pool *pgxpool.Pool, key string) (*models.Order, error) {
 	var o models.Order
 	err := pool.QueryRow(ctx,
-		`SELECT id, user_id, symbol, side, quantity, price, status, idempotency_key,
-		        created_at, executed_at, settled_at
+		`SELECT id, user_id, symbol, side, quantity, filled_quantity, price, status,
+		        order_type, idempotency_key, created_at, executed_at, settled_at
 		 FROM orders WHERE idempotency_key = $1`, key,
-	).Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.Price,
-		&o.Status, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt)
+	).Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.FilledQuantity,
+		&o.Price, &o.Status, &o.OrderType, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt)
 	if err != nil {
 		return nil, fmt.Errorf("get order by idempotency key: %w", err)
 	}
@@ -70,8 +70,8 @@ func GetOrderByIdempotencyKey(ctx context.Context, pool *pgxpool.Pool, key strin
 
 func GetOrdersByUser(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) ([]models.Order, error) {
 	rows, err := pool.Query(ctx,
-		`SELECT id, user_id, symbol, side, quantity, price, status, idempotency_key,
-		        created_at, executed_at, settled_at
+		`SELECT id, user_id, symbol, side, quantity, filled_quantity, price, status,
+		        order_type, idempotency_key, created_at, executed_at, settled_at
 		 FROM orders WHERE user_id = $1 ORDER BY created_at DESC`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get orders by user: %w", err)
@@ -81,8 +81,8 @@ func GetOrdersByUser(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) 
 	var orders []models.Order
 	for rows.Next() {
 		var o models.Order
-		if err := rows.Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.Price,
-			&o.Status, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt); err != nil {
+		if err := rows.Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.FilledQuantity,
+			&o.Price, &o.Status, &o.OrderType, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt); err != nil {
 			return nil, fmt.Errorf("scan order: %w", err)
 		}
 		orders = append(orders, o)
@@ -95,11 +95,11 @@ func CreateOrder(ctx context.Context, pool *pgxpool.Pool, req models.CreateOrder
 	err := pool.QueryRow(ctx,
 		`INSERT INTO orders (user_id, symbol, side, quantity, price, idempotency_key)
 		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, user_id, symbol, side, quantity, price, status, idempotency_key,
-		           created_at, executed_at, settled_at`,
+		 RETURNING id, user_id, symbol, side, quantity, filled_quantity, price, status,
+		           order_type, idempotency_key, created_at, executed_at, settled_at`,
 		req.UserID, req.Symbol, req.Side, req.Quantity, req.Price, nilIfEmpty(req.IdempotencyKey),
-	).Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.Price,
-		&o.Status, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt)
+	).Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.FilledQuantity,
+		&o.Price, &o.Status, &o.OrderType, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt)
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
 	}
@@ -276,6 +276,172 @@ func ExecuteOrder(ctx context.Context, pool *pgxpool.Pool, order models.Order) (
 		return "", fmt.Errorf("commit execution: %w", err)
 	}
 	return "", nil
+}
+
+// GetOpenOrders returns all orders with status 'open' or 'partial' for rebuilding
+// the in-memory order book on processor restart.
+func GetOpenOrders(ctx context.Context, pool *pgxpool.Pool) ([]models.Order, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, user_id, symbol, side, quantity, filled_quantity, price, status,
+		        order_type, idempotency_key, created_at, executed_at, settled_at
+		 FROM orders WHERE status IN ('open', 'partial')
+		 ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("get open orders: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []models.Order
+	for rows.Next() {
+		var o models.Order
+		if err := rows.Scan(&o.ID, &o.UserID, &o.Symbol, &o.Side, &o.Quantity, &o.FilledQuantity,
+			&o.Price, &o.Status, &o.OrderType, &o.IdempotencyKey, &o.CreatedAt, &o.ExecutedAt, &o.SettledAt); err != nil {
+			return nil, fmt.Errorf("scan open order: %w", err)
+		}
+		orders = append(orders, o)
+	}
+	return orders, rows.Err()
+}
+
+// ExecuteTrade atomically settles a single match between a buy and sell order.
+// It locks both user rows in UUID sort order to prevent deadlocks, validates
+// balances/positions, transfers funds, and records the trade + executions.
+func ExecuteTrade(ctx context.Context, pool *pgxpool.Pool, match models.Match, symbol string) error {
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	total := match.Price.Mul(decimal.NewFromInt(int64(match.Quantity)))
+	now := time.Now()
+
+	// Lock both user rows in UUID sort order to prevent deadlocks
+	uid1, uid2 := match.BuyUserID, match.SellUserID
+	if uid1.String() > uid2.String() {
+		uid1, uid2 = uid2, uid1
+	}
+	if _, err := tx.Exec(ctx,
+		`SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, uid1); err != nil {
+		return fmt.Errorf("lock user %s: %w", uid1, err)
+	}
+	if _, err := tx.Exec(ctx,
+		`SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, uid2); err != nil {
+		return fmt.Errorf("lock user %s: %w", uid2, err)
+	}
+
+	// Check buyer balance
+	var buyerBalance decimal.Decimal
+	if err := tx.QueryRow(ctx,
+		`SELECT balance FROM users WHERE id = $1`, match.BuyUserID,
+	).Scan(&buyerBalance); err != nil {
+		return fmt.Errorf("get buyer balance: %w", err)
+	}
+	if buyerBalance.LessThan(total) {
+		return fmt.Errorf("buyer insufficient funds: need %s, have %s", total, buyerBalance)
+	}
+
+	// Check seller position
+	var sellerQty int
+	err = tx.QueryRow(ctx,
+		`SELECT quantity FROM positions WHERE user_id = $1 AND symbol = $2`,
+		match.SellUserID, symbol,
+	).Scan(&sellerQty)
+	if err != nil {
+		return fmt.Errorf("get seller position: %w", err)
+	}
+	if sellerQty < match.Quantity {
+		return fmt.Errorf("seller insufficient shares: need %d, have %d", match.Quantity, sellerQty)
+	}
+
+	// Debit buyer
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET balance = balance - $1 WHERE id = $2`, total, match.BuyUserID); err != nil {
+		return fmt.Errorf("debit buyer: %w", err)
+	}
+
+	// Credit seller
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET balance = balance + $1 WHERE id = $2`, total, match.SellUserID); err != nil {
+		return fmt.Errorf("credit seller: %w", err)
+	}
+
+	// Upsert buyer position (weighted avg cost)
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO positions (user_id, symbol, quantity, avg_cost, updated_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (user_id, symbol) DO UPDATE SET
+		   avg_cost = (positions.avg_cost * positions.quantity + $4 * $3) / (positions.quantity + $3),
+		   quantity = positions.quantity + $3,
+		   updated_at = $5`,
+		match.BuyUserID, symbol, match.Quantity, match.Price, now); err != nil {
+		return fmt.Errorf("upsert buyer position: %w", err)
+	}
+
+	// Update seller position
+	newSellerQty := sellerQty - match.Quantity
+	if newSellerQty == 0 {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM positions WHERE user_id = $1 AND symbol = $2`,
+			match.SellUserID, symbol); err != nil {
+			return fmt.Errorf("delete seller position: %w", err)
+		}
+	} else {
+		if _, err := tx.Exec(ctx,
+			`UPDATE positions SET quantity = $1, updated_at = $2 WHERE user_id = $3 AND symbol = $4`,
+			newSellerQty, now, match.SellUserID, symbol); err != nil {
+			return fmt.Errorf("update seller position: %w", err)
+		}
+	}
+
+	// Insert trade record
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO trades (symbol, buy_order_id, sell_order_id, quantity, price, executed_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		symbol, match.BuyOrderID, match.SellOrderID, match.Quantity, match.Price, now); err != nil {
+		return fmt.Errorf("insert trade: %w", err)
+	}
+
+	// Insert execution records (one per side)
+	for _, exec := range []struct {
+		orderID uuid.UUID
+		userID  uuid.UUID
+		side    models.OrderSide
+	}{
+		{match.BuyOrderID, match.BuyUserID, models.Buy},
+		{match.SellOrderID, match.SellUserID, models.Sell},
+	} {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO executions (order_id, user_id, symbol, side, quantity, price, total, executed_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			exec.orderID, exec.userID, symbol, exec.side, match.Quantity, match.Price, total, now); err != nil {
+			return fmt.Errorf("insert execution for %s: %w", exec.side, err)
+		}
+	}
+
+	// Update filled_quantity and status for both orders
+	for _, oid := range []uuid.UUID{match.BuyOrderID, match.SellOrderID} {
+		if _, err := tx.Exec(ctx,
+			`UPDATE orders SET
+			   filled_quantity = filled_quantity + $1,
+			   status = CASE
+			     WHEN filled_quantity + $1 >= quantity THEN 'executed'
+			     ELSE 'partial'
+			   END,
+			   executed_at = CASE
+			     WHEN filled_quantity + $1 >= quantity THEN $2
+			     ELSE executed_at
+			   END
+			 WHERE id = $3`,
+			match.Quantity, now, oid); err != nil {
+			return fmt.Errorf("update order %s: %w", oid, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit trade: %w", err)
+	}
+	return nil
 }
 
 func nilIfEmpty(s string) *string {

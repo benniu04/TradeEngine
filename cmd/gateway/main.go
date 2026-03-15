@@ -24,6 +24,7 @@ import (
 	"github.com/benniu/tradeengine/internal/db"
 	"github.com/benniu/tradeengine/internal/kafka"
 	"github.com/benniu/tradeengine/internal/models"
+	"github.com/benniu/tradeengine/internal/ws"
 )
 
 func main() {
@@ -45,6 +46,10 @@ func main() {
 
 	h := &handler{pool: pool, rdb: rdb, producer: producer}
 
+	// WebSocket hub + Kafka execution consumer
+	hub := ws.NewHub()
+	go ws.StartExecutionConsumer(ctx, cfg.KafkaBrokers, hub)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -54,6 +59,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+	r.Get("/ws", hub.HandleWS)
 	r.Post("/orders", h.createOrder)
 	r.Get("/orders/{id}", h.getOrder)
 	r.Get("/orders", h.listOrders)
