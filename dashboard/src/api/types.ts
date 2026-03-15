@@ -21,11 +21,18 @@ export interface Order {
   side: 'buy' | 'sell';
   quantity: number;
   price: string;
-  status: 'pending' | 'validated' | 'executed' | 'settled' | 'rejected';
+  filled_quantity?: number;
+  order_type?: string;
+  status: 'pending' | 'validated' | 'open' | 'partial' | 'executed' | 'settled' | 'rejected';
   idempotency_key?: string;
   created_at: string;
   executed_at?: string;
   settled_at?: string;
+}
+
+export interface WSMessage {
+  type: 'order_update' | 'trade' | 'balance_update';
+  data: unknown;
 }
 
 export interface CreateOrderRequest {

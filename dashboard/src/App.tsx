@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { getUser, getPositions, getOrders } from './api/client';
-import type { User, Position, Order } from './api/types';
+import type { User, Position, Order, WSMessage } from './api/types';
 import { usePolling } from './hooks/usePolling';
+import { useWebSocket } from './hooks/useWebSocket';
 import { UserSelector } from './components/UserSelector';
 import { PortfolioOverview } from './components/PortfolioOverview';
 import { OrderForm } from './components/OrderForm';
@@ -29,13 +30,31 @@ function App() {
       });
   }, [userId]);
 
-  usePolling(fetchAll, 5000);
+  const handleWSMessage = useCallback((_msg: WSMessage) => {
+    // On any WebSocket message, refresh data from the server
+    fetchAll();
+  }, [fetchAll]);
+
+  const wsConnected = useWebSocket(userId, handleWSMessage);
+
+  // Poll less frequently when WebSocket is connected (30s vs 5s)
+  usePolling(fetchAll, wsConnected ? 30000 : 5000);
 
   return (
     <div className="min-h-screen bg-black text-white">
       <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-[#00C805]">TradeEngine</h1>
-        <UserSelector selectedId={userId} onChange={setUserId} />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-[#00C805]' : 'bg-red-500'}`}
+            />
+            <span className="text-xs text-gray-500">
+              {wsConnected ? 'Live' : 'Polling'}
+            </span>
+          </div>
+          <UserSelector selectedId={userId} onChange={setUserId} />
+        </div>
       </header>
 
       {error && (
