@@ -43,23 +43,19 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[#00C805]">TradeEngine</h1>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-[#00C805]' : 'bg-red-500'}`}
-            />
-            <span className="text-xs text-gray-500">
-              {wsConnected ? 'Live' : 'Polling'}
-            </span>
-          </div>
-          <UserSelector selectedId={userId} onChange={setUserId} />
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-black/80 border-b border-white/5 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold tracking-tight text-white">TradeEngine</h1>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-[#00C805]' : 'bg-red-500'}`}
+            title={wsConnected ? 'WebSocket connected' : 'Polling mode'}
+          />
         </div>
+        <UserSelector selectedId={userId} onChange={setUserId} />
       </header>
 
       {error && (
-        <div className="max-w-7xl mx-auto px-6 pt-4">
+        <div className="max-w-6xl mx-auto px-6 pt-4">
           <p className="text-red-400 text-sm bg-red-500/10 rounded-lg px-4 py-2">
             {error} — make sure the backend is running on :8080
           </p>
@@ -67,20 +63,14 @@ function App() {
       )}
 
       {user ? (
-        <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
-          {/* Left column: Market data + Order book */}
-          <div className="lg:col-span-1 space-y-6">
+        <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
+          {/* Hero: Portfolio */}
+          <PortfolioOverview user={user} positions={positions} />
+
+          {/* 3-column: Market + Book + Order Form */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <MarketQuote symbol={selectedSymbol} />
             <OrderBookDepth symbol={selectedSymbol} />
-          </div>
-
-          {/* Center: Portfolio */}
-          <div className="lg:col-span-2">
-            <PortfolioOverview user={user} positions={positions} />
-          </div>
-
-          {/* Right: Order form */}
-          <div className="lg:col-span-1">
             <OrderForm
               userId={userId}
               symbol={selectedSymbol}
@@ -89,15 +79,13 @@ function App() {
             />
           </div>
 
-          {/* Full width: Order history */}
-          <div className="lg:col-span-4">
-            <OrderHistory orders={orders} />
-          </div>
+          {/* Order history */}
+          <OrderHistory orders={orders} />
         </main>
       ) : (
         !error && (
           <div className="flex items-center justify-center h-64">
-            <p className="text-gray-400">Loading...</p>
+            <div className="w-4 h-4 border-2 border-gray-700 border-t-gray-400 rounded-full animate-spin" />
           </div>
         )
       )}

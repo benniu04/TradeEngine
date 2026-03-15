@@ -4,6 +4,8 @@ function formatUSD(value: number): string {
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
+const COLORS = ['#00C805', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+
 interface Props {
   user: User;
   positions: Position[];
@@ -18,47 +20,53 @@ export function PortfolioOverview({ user, positions }: Props) {
   const totalValue = cash + holdingsValue;
 
   return (
-    <div className="bg-gray-900 rounded-xl p-6">
-      <p className="text-gray-400 text-sm mb-1">Portfolio Value</p>
-      <p className="text-4xl font-bold text-[#00C805] mb-4">{formatUSD(totalValue)}</p>
+    <div>
+      <p className="text-sm text-gray-500 mb-1">Portfolio Value</p>
+      <p className="text-5xl font-bold tracking-tight text-white mb-4">{formatUSD(totalValue)}</p>
 
-      <div className="flex gap-6 mb-6">
-        <div>
-          <p className="text-gray-400 text-xs">Cash</p>
-          <p className="text-white text-lg font-semibold">{formatUSD(cash)}</p>
+      <div className="flex items-center gap-6 text-sm mb-6">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">Cash</span>
+          <span className="text-white font-medium">{formatUSD(cash)}</span>
         </div>
-        <div>
-          <p className="text-gray-400 text-xs">Holdings</p>
-          <p className="text-white text-lg font-semibold">{formatUSD(holdingsValue)}</p>
+        <span className="text-gray-800">|</span>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">Holdings</span>
+          <span className="text-white font-medium">{formatUSD(holdingsValue)}</span>
         </div>
       </div>
 
-      <div>
-        <p className="text-gray-400 text-sm mb-3">Positions</p>
-        {positions.length === 0 ? (
-          <p className="text-gray-500 text-sm">No holdings yet</p>
-        ) : (
-          <div className="space-y-3">
-            {positions.map((p) => {
-              const value = p.quantity * parseFloat(p.avg_cost);
-              return (
+      {positions.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {positions.map((p, i) => {
+            const value = p.quantity * parseFloat(p.avg_cost);
+            const color = COLORS[i % COLORS.length];
+            return (
+              <div
+                key={p.id}
+                className="flex items-center gap-3 bg-white/3 rounded-lg px-4 py-3"
+              >
                 <div
-                  key={p.id}
-                  className="flex items-center justify-between border-b border-gray-800 pb-3"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0"
+                  style={{ backgroundColor: color }}
                 >
-                  <div>
-                    <p className="text-white text-lg font-semibold">{p.symbol}</p>
-                    <p className="text-gray-400 text-xs">
-                      {p.quantity} shares @ {formatUSD(parseFloat(p.avg_cost))}
-                    </p>
-                  </div>
-                  <p className="text-white font-medium">{formatUSD(value)}</p>
+                  {p.symbol[0]}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-medium text-sm">{p.symbol}</span>
+                    <span className="text-gray-500 text-xs">{p.quantity} shares</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm font-mono tabular-nums">{formatUSD(value)}</span>
+                    <span className="text-gray-600 text-xs">@ {formatUSD(parseFloat(p.avg_cost))}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

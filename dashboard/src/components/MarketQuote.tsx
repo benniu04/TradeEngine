@@ -23,8 +23,8 @@ export function MarketQuote({ symbol }: { symbol: string }) {
 
   if (error) {
     return (
-      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-        <p className="text-gray-500 text-sm">
+      <div className="bg-gray-900/40 rounded-xl p-5">
+        <p className="text-gray-600 text-xs">
           Market data unavailable — set FINNHUB_API_KEY to enable
         </p>
       </div>
@@ -33,8 +33,8 @@ export function MarketQuote({ symbol }: { symbol: string }) {
 
   if (!quote || quote.c === 0) {
     return (
-      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-        <p className="text-gray-500 text-sm">Loading {symbol} quote...</p>
+      <div className="bg-gray-900/40 rounded-xl p-5">
+        <p className="text-gray-600 text-xs">Loading {symbol}...</p>
       </div>
     );
   }
@@ -42,37 +42,34 @@ export function MarketQuote({ symbol }: { symbol: string }) {
   const isUp = quote.d >= 0;
 
   return (
-    <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">{symbol}</h2>
-        <span className="text-xs text-gray-500">Live Market Data</span>
-      </div>
+    <div className="bg-gray-900/40 rounded-xl p-5">
+      <p className="text-xs text-gray-500 mb-2">{symbol}</p>
 
-      <div className="flex items-baseline gap-3 mb-4">
-        <span className="text-3xl font-bold text-white">
+      <div className="flex items-baseline gap-2 mb-4">
+        <span className="text-2xl font-bold text-white font-mono tabular-nums">
           ${quote.c.toFixed(2)}
         </span>
-        <span className={`text-sm font-medium ${isUp ? 'text-[#00C805]' : 'text-red-400'}`}>
-          {isUp ? '+' : ''}{quote.d.toFixed(2)} ({isUp ? '+' : ''}{quote.dp.toFixed(2)}%)
+        <span className={`text-xs font-medium ${isUp ? 'text-[#00C805]' : 'text-red-400'}`}>
+          {isUp ? '▲' : '▼'} {Math.abs(quote.d).toFixed(2)} ({Math.abs(quote.dp).toFixed(2)}%)
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <div className="flex justify-between">
-          <span className="text-gray-500">Open</span>
-          <span className="text-white">${quote.o.toFixed(2)}</span>
+          <span className="text-gray-600">Open</span>
+          <span className="text-gray-400 font-mono tabular-nums">${quote.o.toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Prev Close</span>
-          <span className="text-white">${quote.pc.toFixed(2)}</span>
+          <span className="text-gray-600">Prev</span>
+          <span className="text-gray-400 font-mono tabular-nums">${quote.pc.toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">High</span>
-          <span className="text-[#00C805]">${quote.h.toFixed(2)}</span>
+          <span className="text-gray-600">High</span>
+          <span className="text-gray-400 font-mono tabular-nums">${quote.h.toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Low</span>
-          <span className="text-red-400">${quote.l.toFixed(2)}</span>
+          <span className="text-gray-600">Low</span>
+          <span className="text-gray-400 font-mono tabular-nums">${quote.l.toFixed(2)}</span>
         </div>
       </div>
     </div>
