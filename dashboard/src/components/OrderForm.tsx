@@ -3,12 +3,13 @@ import { createOrder } from '../api/client';
 
 interface Props {
   userId: string;
+  symbol: string;
+  onSymbolChange: (symbol: string) => void;
   onOrderPlaced: () => void;
 }
 
-export function OrderForm({ userId, onOrderPlaced }: Props) {
+export function OrderForm({ userId, symbol, onSymbolChange, onOrderPlaced }: Props) {
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
-  const [symbol, setSymbol] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -29,7 +30,6 @@ export function OrderForm({ userId, onOrderPlaced }: Props) {
         idempotency_key: crypto.randomUUID(),
       });
       setMessage({ type: 'success', text: 'Order placed!' });
-      setSymbol('');
       setQuantity('');
       setPrice('');
       onOrderPlaced();
@@ -74,7 +74,7 @@ export function OrderForm({ userId, onOrderPlaced }: Props) {
           type="text"
           placeholder="Symbol (e.g. AAPL)"
           value={symbol}
-          onChange={(e) => setSymbol(e.target.value)}
+          onChange={(e) => onSymbolChange(e.target.value)}
           required
           className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm uppercase placeholder:normal-case focus:border-[#00C805] focus:outline-none"
         />

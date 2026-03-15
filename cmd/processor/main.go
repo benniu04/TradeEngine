@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/joho/godotenv"
 	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ import (
 )
 
 func main() {
+	godotenv.Load() // load .env if present
 	cfg := config.Load()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

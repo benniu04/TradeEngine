@@ -12,6 +12,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/joho/godotenv"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
@@ -23,11 +25,13 @@ import (
 	"github.com/benniu/tradeengine/internal/config"
 	"github.com/benniu/tradeengine/internal/db"
 	"github.com/benniu/tradeengine/internal/kafka"
+	"github.com/benniu/tradeengine/internal/market"
 	"github.com/benniu/tradeengine/internal/models"
 	"github.com/benniu/tradeengine/internal/ws"
 )
 
 func main() {
+	godotenv.Load() // load .env if present
 	cfg := config.Load()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -44,7 +48,8 @@ func main() {
 	producer := kafka.NewProducer(cfg.KafkaBrokers, "orders")
 	defer producer.Close()
 
-	h := &handler{pool: pool, rdb: rdb, producer: producer}
+	marketClient := market.NewClient(cfg.FinnhubAPIKey, rdb)
+	h := &handler{pool: pool, rdb: rdb, producer: producer, market: marketClient}
 
 	// WebSocket hub + Kafka execution consumer
 	hub := ws.NewHub()
@@ -65,6 +70,8 @@ func main() {
 	r.Get("/orders", h.listOrders)
 	r.Get("/positions", h.listPositions)
 	r.Get("/users/{id}", h.getUser)
+	r.Get("/quote/{symbol}", h.getQuote)
+	r.Get("/book/{symbol}", h.getBookDepth)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.GatewayPort,
@@ -89,6 +96,7 @@ type handler struct {
 	pool     *pgxpool.Pool
 	rdb      *redis.Client
 	producer *kafka.Producer
+	market   *market.Client
 }
 
 func (h *handler) createOrder(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +278,38 @@ func (h *handler) getUser(w http.ResponseWriter, r *http.Request) {
 	cache.SetUserBalance(ctx, h.rdb, id, user.Balance)
 
 	writeJSON(w, http.StatusOK, user)
+}
+
+func (h *handler) getQuote(w http.ResponseWriter, r *http.Request) {
+	symbol := chi.URLParam(r, "symbol")
+	if symbol == "" {
+		writeError(w, http.StatusBadRequest, "symbol is required")
+		return
+	}
+
+	quote, err := h.market.GetQuote(r.Context(), symbol)
+	if err != nil {
+		log.Printf("quote error for %s: %v", symbol, err)
+		writeError(w, http.StatusBadGateway, "failed to fetch quote")
+		return
+	}
+	writeJSON(w, http.StatusOK, quote)
+}
+
+func (h *handler) getBookDepth(w http.ResponseWriter, r *http.Request) {
+	symbol := chi.URLParam(r, "symbol")
+	if symbol == "" {
+		writeError(w, http.StatusBadRequest, "symbol is required")
+		return
+	}
+
+	depth, err := db.GetOrderBookDepth(r.Context(), h.pool, symbol)
+	if err != nil {
+		log.Printf("book depth error for %s: %v", symbol, err)
+		writeError(w, http.StatusInternalServerError, "failed to get book depth")
+		return
+	}
+	writeJSON(w, http.StatusOK, depth)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

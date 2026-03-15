@@ -7,6 +7,8 @@ import { UserSelector } from './components/UserSelector';
 import { PortfolioOverview } from './components/PortfolioOverview';
 import { OrderForm } from './components/OrderForm';
 import { OrderHistory } from './components/OrderHistory';
+import { MarketQuote } from './components/MarketQuote';
+import { OrderBookDepth } from './components/OrderBookDepth';
 
 const DEFAULT_USER = '11111111-1111-1111-1111-111111111111';
 
@@ -16,6 +18,7 @@ function App() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
 
   const fetchAll = useCallback(() => {
     Promise.all([getUser(userId), getPositions(userId), getOrders(userId)])
@@ -31,13 +34,11 @@ function App() {
   }, [userId]);
 
   const handleWSMessage = useCallback((_msg: WSMessage) => {
-    // On any WebSocket message, refresh data from the server
     fetchAll();
   }, [fetchAll]);
 
   const wsConnected = useWebSocket(userId, handleWSMessage);
 
-  // Poll less frequently when WebSocket is connected (30s vs 5s)
   usePolling(fetchAll, wsConnected ? 30000 : 5000);
 
   return (
@@ -58,7 +59,7 @@ function App() {
       </header>
 
       {error && (
-        <div className="max-w-6xl mx-auto px-6 pt-4">
+        <div className="max-w-7xl mx-auto px-6 pt-4">
           <p className="text-red-400 text-sm bg-red-500/10 rounded-lg px-4 py-2">
             {error} — make sure the backend is running on :8080
           </p>
@@ -66,14 +67,30 @@ function App() {
       )}
 
       {user ? (
-        <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
-          <div className="md:col-span-2">
+        <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
+          {/* Left column: Market data + Order book */}
+          <div className="lg:col-span-1 space-y-6">
+            <MarketQuote symbol={selectedSymbol} />
+            <OrderBookDepth symbol={selectedSymbol} />
+          </div>
+
+          {/* Center: Portfolio */}
+          <div className="lg:col-span-2">
             <PortfolioOverview user={user} positions={positions} />
           </div>
-          <div>
-            <OrderForm userId={userId} onOrderPlaced={fetchAll} />
+
+          {/* Right: Order form */}
+          <div className="lg:col-span-1">
+            <OrderForm
+              userId={userId}
+              symbol={selectedSymbol}
+              onSymbolChange={setSelectedSymbol}
+              onOrderPlaced={fetchAll}
+            />
           </div>
-          <div className="md:col-span-3">
+
+          {/* Full width: Order history */}
+          <div className="lg:col-span-4">
             <OrderHistory orders={orders} />
           </div>
         </main>

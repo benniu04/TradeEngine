@@ -444,6 +444,55 @@ func ExecuteTrade(ctx context.Context, pool *pgxpool.Pool, match models.Match, s
 	return nil
 }
 
+// GetOrderBookDepth returns aggregated bid/ask price levels for a symbol.
+func GetOrderBookDepth(ctx context.Context, pool *pgxpool.Pool, symbol string) (*models.OrderBookDepth, error) {
+	depth := &models.OrderBookDepth{Symbol: symbol}
+
+	for _, side := range []models.OrderSide{models.Buy, models.Sell} {
+		orderDir := "DESC"
+		if side == models.Sell {
+			orderDir = "ASC"
+		}
+		rows, err := pool.Query(ctx,
+			fmt.Sprintf(`SELECT price, SUM(quantity - filled_quantity) AS total_qty, COUNT(*) AS order_count
+			 FROM orders
+			 WHERE symbol = $1 AND status IN ('open', 'partial') AND side = $2
+			 GROUP BY price
+			 ORDER BY price %s`, orderDir),
+			symbol, string(side))
+		if err != nil {
+			return nil, fmt.Errorf("get book depth %s: %w", side, err)
+		}
+
+		for rows.Next() {
+			var level models.BookLevel
+			if err := rows.Scan(&level.Price, &level.TotalQty, &level.OrderCount); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scan book level: %w", err)
+			}
+			level.Side = side
+			if side == models.Buy {
+				depth.Bids = append(depth.Bids, level)
+			} else {
+				depth.Asks = append(depth.Asks, level)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	if depth.Bids == nil {
+		depth.Bids = []models.BookLevel{}
+	}
+	if depth.Asks == nil {
+		depth.Asks = []models.BookLevel{}
+	}
+
+	return depth, nil
+}
+
 func nilIfEmpty(s string) *string {
 	if s == "" {
 		return nil

@@ -35,6 +35,30 @@ export interface WSMessage {
   data: unknown;
 }
 
+export interface Quote {
+  c: number;   // current price
+  d: number;   // change
+  dp: number;  // percent change
+  h: number;   // high
+  l: number;   // low
+  o: number;   // open
+  pc: number;  // previous close
+  t: number;   // timestamp
+}
+
+export interface BookLevel {
+  price: string;
+  total_qty: number;
+  order_count: number;
+  side: 'buy' | 'sell';
+}
+
+export interface OrderBookDepth {
+  symbol: string;
+  bids: BookLevel[];
+  asks: BookLevel[];
+}
+
 export interface CreateOrderRequest {
   user_id: string;
   symbol: string;

@@ -116,3 +116,30 @@ type OrderEvent struct {
 	Trades []Trade `json:"trades,omitempty"`
 	Reason string  `json:"reason,omitempty"`
 }
+
+// Quote represents a real-time stock quote from Finnhub.
+type Quote struct {
+	CurrentPrice  float64 `json:"c"`
+	Change        float64 `json:"d"`
+	PercentChange float64 `json:"dp"`
+	High          float64 `json:"h"`
+	Low           float64 `json:"l"`
+	Open          float64 `json:"o"`
+	PreviousClose float64 `json:"pc"`
+	Timestamp     int64   `json:"t"`
+}
+
+// BookLevel represents an aggregated price level in the order book.
+type BookLevel struct {
+	Price      decimal.Decimal `json:"price"`
+	TotalQty   int             `json:"total_qty"`
+	OrderCount int             `json:"order_count"`
+	Side       OrderSide       `json:"side"`
+}
+
+// OrderBookDepth is the full order book snapshot returned by the API.
+type OrderBookDepth struct {
+	Symbol string      `json:"symbol"`
+	Bids   []BookLevel `json:"bids"`
+	Asks   []BookLevel `json:"asks"`
+}
